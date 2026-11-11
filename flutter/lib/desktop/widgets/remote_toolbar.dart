@@ -336,10 +336,15 @@ class _ToolbarTheme {
   static const double height = 20.0;
   static const double dividerHeight = 12.0;
 
-  static const double buttonSize = 24;
-  static const double buttonHMargin = 2;
+  // Fixed session bar: every button is a buttonSize square, the glyph
+  // inside is iconSize so all icons share the same visual height.
+  static const double buttonSize = 28;
+  static const double iconSize = 18;
+  static const double monitorIconSize = 22;
+  static const double buttonHMargin = 3;
   static const double buttonVMargin = 4;
-  static const double iconRadius = 4;
+  static const double groupGap = 8;
+  static const double iconRadius = 0;
   static const double elevation = 3;
 
   static double dividerSpaceToAction = isWindows ? 8 : 14;
@@ -766,6 +771,8 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       ),
     ).marginOnly(left: 6));
 
+    // Groups (AnyDesk-like), separated by dividers:
+    // communication | input/actions | monitors | display/record | window.
     final List<Widget> right = [];
     right.add(_ChatMenu(id: widget.id, ffi: widget.ffi));
     if (!isWeb) {
@@ -774,6 +781,7 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
     if (widget.ffi.connType == ConnType.defaultConn && !isWeb) {
       right.add(_FileTransferButton(id: widget.id, ffi: widget.ffi));
     }
+    right.add(_buildBarDivider(context));
     right.add(_ControlMenu(id: widget.id, ffi: widget.ffi, state: widget.state));
     if (!isWebDesktop) {
       right.add(_MobileActionMenu(ffi: widget.ffi));
@@ -781,16 +789,20 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
     if (widget.ffi.connType == ConnType.defaultConn) {
       right.add(_KeyboardMenu(id: widget.id, ffi: widget.ffi));
     }
+    right.add(_buildBarDivider(context));
     right.add(Obx(() {
       final privacyModeState = PrivacyModeState.find(widget.id);
       if ((privacyModeState.isEmpty ||
               allowDisplaySwitchInPrivacyMode(pi, privacyModeState.value)) &&
           pi.displaysCount.value > 1) {
-        return _MonitorMenu(
-            id: widget.id,
-            ffi: widget.ffi,
-            edge: edge,
-            setRemoteState: widget.setRemoteState);
+        return Row(mainAxisSize: MainAxisSize.min, children: [
+          _MonitorMenu(
+              id: widget.id,
+              ffi: widget.ffi,
+              edge: edge,
+              setRemoteState: widget.setRemoteState),
+          _buildBarDivider(context),
+        ]);
       } else {
         return const Offstage();
       }
@@ -805,18 +817,23 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       right.add(_RecordMenu());
     }
     right.add(_buildBarDivider(context));
+    // Window controls, Windows style: minimize, fullscreen/restore, close.
+    final ctrlColor = _ToolbarTheme.flatIconColor(context);
     right.add(_IconMenuButton(
-      icon: Icon(IconFont.min,
-          size: 14, color: _ToolbarTheme.flatIconColor(context)),
+      icon: Icon(Icons.remove_sharp,
+          size: _ToolbarTheme.iconSize, color: ctrlColor),
       tooltip: 'Minimize',
       color: _ToolbarTheme.blueColor,
       hoverColor: _ToolbarTheme.hoverBlueColor,
       onPressed: _minimize,
     ));
     right.add(Obx(() => _IconMenuButton(
-          assetName: stateGlobal.fullscreen.isTrue
-              ? 'assets/fullscreen_exit.svg'
-              : 'assets/fullscreen.svg',
+          icon: Icon(
+              stateGlobal.fullscreen.isTrue
+                  ? Icons.filter_none_sharp
+                  : Icons.crop_square_sharp,
+              size: _ToolbarTheme.iconSize - 2,
+              color: ctrlColor),
           tooltip:
               stateGlobal.fullscreen.isTrue ? 'Exit Fullscreen' : 'Fullscreen',
           color: _ToolbarTheme.blueColor,
@@ -834,14 +851,27 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       child: Container(
         height: kDesktopRemoteSessionToolbarHeight,
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(color: Theme.of(context).dividerColor),
           ),
         ),
         child: Theme(
-          data: themeData(),
+          // Each button sits in its own MenuBar; the app theme paints that
+          // bar with a solid colour, which showed as dark boxes behind the
+          // icons. Make it transparent here.
+          data: themeData().copyWith(
+            menuBarTheme: MenuBarThemeData(
+              style: MenuStyle(
+                backgroundColor:
+                    const MaterialStatePropertyAll(Colors.transparent),
+                padding: const MaterialStatePropertyAll(EdgeInsets.zero),
+                elevation: const MaterialStatePropertyAll(0),
+                shape: const MaterialStatePropertyAll(BeveledRectangleBorder()),
+              ),
+            ),
+          ),
           child: Row(
             children: [
               Row(mainAxisSize: MainAxisSize.min, children: left),
@@ -868,9 +898,9 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
   Widget _buildBarDivider(BuildContext context) {
     return Container(
       width: 1,
-      height: 16,
+      height: 18,
       color: Theme.of(context).dividerColor,
-    ).marginSymmetric(horizontal: 6);
+    ).marginSymmetric(horizontal: _ToolbarTheme.groupGap);
   }
 
   // Original floating/dockable toolbar, kept for reference (unused).
@@ -1280,14 +1310,11 @@ class _MonitorMenu extends StatelessWidget {
   }
 
   Widget buildMonitorMenu(BuildContext context) {
-    final width = SimpleWrapper<double>(0);
-    final monitorsIcon = globalMonitorsWidget(
-        width, Colors.white, _ToolbarTheme.hoverBlueColor, context);
+    RxInt display = CurrentDisplayState.find(id);
     return _IconSubmenuButton(
         tooltip: 'Select Monitor',
-        icon: monitorsIcon,
+        icon: Obx(() => monitorIcon(display.value, display.value, context)),
         ffi: ffi,
-        width: width.value,
         color: _ToolbarTheme.blueColor,
         hoverColor: _ToolbarTheme.hoverBlueColor,
         menuStyle: MenuStyle(
@@ -1326,16 +1353,38 @@ class _MonitorMenu extends StatelessWidget {
         child: Text(translate('Show displays as individual windows')));
   }
 
-  buildOneMonitorButton(i, curDisplay, BuildContext context) => Text(
-        '${i + 1}',
-        style: TextStyle(
-          color: i == curDisplay
-              ? _ToolbarTheme.hoverBlueColor
-              : _ToolbarTheme.flatIconColor(context),
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      );
+  // A monitor glyph with the display number on the screen area.
+  Widget monitorIcon(int i, int curDisplay, BuildContext context) {
+    final color = i == curDisplay
+        ? _ToolbarTheme.hoverBlueColor
+        : _ToolbarTheme.flatIconColor(context);
+    return SizedBox(
+      width: _ToolbarTheme.monitorIconSize,
+      height: _ToolbarTheme.monitorIconSize,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SvgPicture.asset(
+            "assets/screen.svg",
+            colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+            width: _ToolbarTheme.monitorIconSize,
+            height: _ToolbarTheme.monitorIconSize,
+          ),
+          Text(
+            '${i + 1}',
+            style: TextStyle(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF24252B)
+                  : Colors.white,
+              fontSize: _ToolbarTheme.monitorIconSize * 0.42,
+              fontWeight: FontWeight.bold,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   List<Widget> buildMonitorList(BuildContext context, bool isMulti) {
     final List<Widget> monitorList = [];
@@ -1343,20 +1392,8 @@ class _MonitorMenu extends StatelessWidget {
 
     buildMonitorButton(int i) => Obx(() {
           RxInt display = CurrentDisplayState.find(id);
-
-          final isAllMonitors = i == kAllDisplayValue;
-          final width = SimpleWrapper<double>(0);
-          Widget? monitorsIcon;
-          if (isAllMonitors) {
-            monitorsIcon = globalMonitorsWidget(
-                width, Colors.white, _ToolbarTheme.blueColor, context);
-          }
           return _IconMenuButton(
-            tooltip: isMulti
-                ? ''
-                : isAllMonitors
-                    ? 'All monitors'
-                    : '#{${i + 1}} monitor',
+            tooltip: '#{${i + 1}} monitor',
             hMargin: isMulti ? null : 6,
             vMargin: isMulti ? null : 12,
             topLevel: false,
@@ -1366,112 +1403,16 @@ class _MonitorMenu extends StatelessWidget {
             hoverColor: i == display.value
                 ? _ToolbarTheme.hoverBlueColor
                 : _ToolbarTheme.hoverInactiveColor,
-            width: isAllMonitors ? width.value : null,
-            icon: isAllMonitors
-                ? monitorsIcon
-                : Container(
-                    alignment: AlignmentDirectional.center,
-                    constraints:
-                        const BoxConstraints(minHeight: _ToolbarTheme.height),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SvgPicture.asset(
-                          "assets/screen.svg",
-                          colorFilter: ColorFilter.mode(
-                              i == display.value
-                                  ? _ToolbarTheme.hoverBlueColor
-                                  : _ToolbarTheme.flatIconColor(context),
-                              BlendMode.srcIn),
-                        ),
-                        Obx(() =>
-                            buildOneMonitorButton(i, display.value, context)),
-                      ],
-                    ),
-                  ),
+            icon: monitorIcon(i, display.value, context),
             onPressed: () => onPressed(i, pi, isMulti),
           );
         });
 
+    // The "all monitors in one window" entry is intentionally not offered.
     for (int i = 0; i < pi.displays.length; i++) {
       monitorList.add(buildMonitorButton(i));
     }
-    if (supportIndividualWindows && pi.displays.length > 1) {
-      monitorList.add(buildMonitorButton(kAllDisplayValue));
-    }
     return monitorList;
-  }
-
-  globalMonitorsWidget(SimpleWrapper<double> width, Color activeTextColor,
-      Color activeBgColor, BuildContext context) {
-    getMonitors() {
-      final pi = ffi.ffiModel.pi;
-      RxInt display = CurrentDisplayState.find(id);
-      final rect = ffi.ffiModel.globalDisplaysRect();
-      if (rect == null) {
-        return Offstage();
-      }
-
-      final scale = _ToolbarTheme.buttonSize / rect.height * 0.75;
-      final height = rect.height * scale;
-      final startY = (_ToolbarTheme.buttonSize - height) * 0.5;
-      final startX = startY;
-
-      final children = <Widget>[];
-      for (var i = 0; i < pi.displays.length; i++) {
-        final d = pi.displays[i];
-        double s = d.scale;
-        int dWidth = d.width.toDouble() ~/ s;
-        int dHeight = d.height.toDouble() ~/ s;
-        final fontSize = (dWidth * scale < dHeight * scale
-                ? dWidth * scale
-                : dHeight * scale) *
-            0.65;
-        children.add(Positioned(
-          left: (d.x - rect.left) * scale + startX,
-          top: (d.y - rect.top) * scale + startY,
-          width: dWidth * scale,
-          height: dHeight * scale,
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: _ToolbarTheme.flatIconColor(context),
-                width: 1.0,
-              ),
-              color:
-                  display.value == i ? activeBgColor : Colors.transparent,
-            ),
-            child: Center(
-                child: Text(
-              '${i + 1}',
-              style: TextStyle(
-                color: display.value == i
-                    ? activeTextColor
-                    : _ToolbarTheme.flatIconColor(context),
-                fontSize: fontSize,
-                fontWeight: FontWeight.bold,
-              ),
-            )),
-          ),
-        ));
-      }
-      width.value = rect.width * scale + startX * 2;
-      return SizedBox(
-        width: width.value,
-        height: height + startY * 2,
-        child: Stack(
-          children: children,
-        ),
-      );
-    }
-
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        SizedBox(height: _ToolbarTheme.buttonSize),
-        getMonitors(),
-      ],
-    );
   }
 
   onPressed(int i, PeerInfo pi, bool isMulti) {
@@ -3235,7 +3176,8 @@ class _CloseMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _IconMenuButton(
-      assetName: 'assets/close.svg',
+      icon: Icon(Icons.close_sharp,
+          size: _ToolbarTheme.iconSize, color: _ToolbarTheme.hoverRedColor),
       tooltip: 'Close',
       onPressed: () async {
         if (await showConnEndAuditDialogCloseCanceled(ffi: ffi)) {
@@ -3288,16 +3230,20 @@ class _IconMenuButtonState extends State<_IconMenuButton> {
   Widget build(BuildContext context) {
     assert(widget.assetName != null || widget.icon != null);
     final flat = _ToolbarTheme.isFlat(widget.color);
-    final icon = widget.icon ??
-        SvgPicture.asset(
-          widget.assetName!,
-          colorFilter: ColorFilter.mode(
-              widget.iconColor ??
-                  (flat ? _ToolbarTheme.flatIconColor(context) : Colors.white),
-              BlendMode.srcIn),
-          width: _ToolbarTheme.buttonSize,
-          height: _ToolbarTheme.buttonSize,
-        );
+    final icon = Center(
+      child: widget.icon ??
+          SvgPicture.asset(
+            widget.assetName!,
+            colorFilter: ColorFilter.mode(
+                widget.iconColor ??
+                    (flat
+                        ? _ToolbarTheme.flatIconColor(context)
+                        : Colors.white),
+                BlendMode.srcIn),
+            width: _ToolbarTheme.iconSize,
+            height: _ToolbarTheme.iconSize,
+          ),
+    );
     final bg = flat
         ? (hover ? _ToolbarTheme.flatHoverColor(context) : Colors.transparent)
         : (hover ? widget.hoverColor : widget.color);
@@ -3313,18 +3259,17 @@ class _IconMenuButtonState extends State<_IconMenuButton> {
                 hover = value;
               }),
           onPressed: widget.onPressed,
-          child: Tooltip(
-            message: translate(widget.tooltip),
-            child: Material(
-                type: MaterialType.transparency,
-                child: Ink(
-                    decoration: BoxDecoration(
-                      borderRadius:
-                          BorderRadius.circular(_ToolbarTheme.iconRadius),
-                      color: bg,
-                    ),
-                    child: icon)),
-          )),
+          child: Material(
+              type: MaterialType.transparency,
+              child: Ink(
+                  width: widget.width ?? _ToolbarTheme.buttonSize,
+                  height: _ToolbarTheme.buttonSize,
+                  decoration: BoxDecoration(
+                    borderRadius:
+                        BorderRadius.circular(_ToolbarTheme.iconRadius),
+                    color: bg,
+                  ),
+                  child: icon))),
     ).marginSymmetric(
         horizontal: widget.hMargin ?? _ToolbarTheme.buttonHMargin,
         vertical: widget.vMargin ?? _ToolbarTheme.buttonVMargin);
@@ -3380,15 +3325,17 @@ class _IconSubmenuButtonState extends State<_IconSubmenuButton> {
   Widget build(BuildContext context) {
     assert(widget.svg != null || widget.icon != null);
     final flat = _ToolbarTheme.isFlat(widget.color);
-    final icon = widget.icon ??
-        SvgPicture.asset(
-          widget.svg!,
-          colorFilter: ColorFilter.mode(
-              flat ? _ToolbarTheme.flatIconColor(context) : Colors.white,
-              BlendMode.srcIn),
-          width: _ToolbarTheme.buttonSize,
-          height: _ToolbarTheme.buttonSize,
-        );
+    final icon = Center(
+      child: widget.icon ??
+          SvgPicture.asset(
+            widget.svg!,
+            colorFilter: ColorFilter.mode(
+                flat ? _ToolbarTheme.flatIconColor(context) : Colors.white,
+                BlendMode.srcIn),
+            width: _ToolbarTheme.iconSize,
+            height: _ToolbarTheme.iconSize,
+          ),
+    );
     final bg = flat
         ? (hover ? _ToolbarTheme.flatHoverColor(context) : Colors.transparent)
         : (hover ? widget.hoverColor : widget.color);
@@ -3407,6 +3354,8 @@ class _IconSubmenuButtonState extends State<_IconSubmenuButton> {
                 child: Material(
                     type: MaterialType.transparency,
                     child: Ink(
+                        width: widget.width ?? _ToolbarTheme.buttonSize,
+                        height: _ToolbarTheme.buttonSize,
                         decoration: BoxDecoration(
                           borderRadius:
                               BorderRadius.circular(_ToolbarTheme.iconRadius),
