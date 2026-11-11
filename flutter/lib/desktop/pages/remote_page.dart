@@ -150,6 +150,7 @@ class _RemotePageState extends State<RemotePage>
   @override
   void initState() {
     super.initState();
+    CanvasModel.sessionToolbarHeight = kDesktopRemoteSessionToolbarHeight;
     _ffi = FFI(widget.sessionId);
     if (isMacOS) {
       // SchedulerBinding.instance.lifecycleState is null in the first connection in a new window.
@@ -736,6 +737,8 @@ class _RemotePageState extends State<RemotePage>
         children: [
           Container(
               color: kColorCanvas,
+              padding: const EdgeInsets.only(
+                  top: kDesktopRemoteSessionToolbarHeight),
               child: RawKeyFocusScope(
                   focusNode: _rawKeyFocusNode,
                   onFocusChange: (bool imageFocused) {

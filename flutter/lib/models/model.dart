@@ -2330,8 +2330,14 @@ class CanvasModel with ChangeNotifier {
       isDesktop ? windowBorderWidth + kDragToResizeAreaPadding.left : 0;
   static double get rightToEdge =>
       isDesktop ? windowBorderWidth + kDragToResizeAreaPadding.right : 0;
+  // Height of the fixed session toolbar above the remote image.
+  // Set by the desktop remote page; 0 for other canvas users (e.g. camera).
+  static double sessionToolbarHeight = 0;
   static double get topToEdge => isDesktop
-      ? tabBarHeight + windowBorderWidth + kDragToResizeAreaPadding.top
+      ? tabBarHeight +
+          sessionToolbarHeight +
+          windowBorderWidth +
+          kDragToResizeAreaPadding.top
       : 0;
   static double get bottomToEdge =>
       isDesktop ? windowBorderWidth + kDragToResizeAreaPadding.bottom : 0;

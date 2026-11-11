@@ -372,6 +372,17 @@ class _ToolbarTheme {
     overlayColor: MaterialStatePropertyAll(Colors.transparent),
   );
 
+  static Color flatIconColor(BuildContext context) =>
+      Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.75) ??
+      Colors.black87;
+
+  static Color flatHoverColor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Colors.white.withOpacity(0.08)
+          : Colors.black.withOpacity(0.07);
+
+  static bool isFlat(Color c) => c == blueColor || c == hoverBlueColor;
+
   static Widget borderWrapper(
       BuildContext context, Widget child, BorderRadius borderRadius) {
     return Container(
@@ -685,7 +696,113 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      // Wait for initialization to complete to prevent flickering
+      if (!widget.state.initialized.value) {
+        return const SizedBox.shrink();
+      }
+      return Align(
+        alignment: Alignment.topCenter,
+        child: _buildFixedBar(context),
+      );
+    });
+  }
+
+  /// AnyDesk-style toolbar: full width, docked at the top, never collapses.
+  Widget _buildFixedBar(BuildContext context) {
+    const edge = _ToolbarEdge.top;
+    final List<Widget> left = [];
+    left.add(Obx(() {
+      final privacyModeState = PrivacyModeState.find(widget.id);
+      if ((privacyModeState.isEmpty ||
+              allowDisplaySwitchInPrivacyMode(pi, privacyModeState.value)) &&
+          pi.displaysCount.value > 1) {
+        return _MonitorMenu(
+            id: widget.id,
+            ffi: widget.ffi,
+            edge: edge,
+            setRemoteState: widget.setRemoteState);
+      } else {
+        return const Offstage();
+      }
+    }));
+    left.add(_ControlMenu(id: widget.id, ffi: widget.ffi, state: widget.state));
+    left.add(_DisplayMenu(
+      id: widget.id,
+      ffi: widget.ffi,
+      state: widget.state,
+      setFullscreen: _setFullscreen,
+    ));
+    if (widget.ffi.connType == ConnType.defaultConn) {
+      left.add(_KeyboardMenu(id: widget.id, ffi: widget.ffi));
+    }
+    if (!isWebDesktop) {
+      left.add(_MobileActionMenu(ffi: widget.ffi));
+    }
+    left.add(_buildBarDivider(context));
+    left.add(_ChatMenu(id: widget.id, ffi: widget.ffi));
+    if (!isWeb) {
+      left.add(_VoiceCallMenu(id: widget.id, ffi: widget.ffi));
+      left.add(_RecordMenu());
+    }
+
+    final barColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF24252B)
+        : const Color(0xFFF4F4F6);
+    return Material(
+      color: barColor,
+      elevation: 0,
+      child: Container(
+        height: kDesktopRemoteSessionToolbarHeight,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Theme.of(context).dividerColor),
+          ),
+        ),
+        child: Theme(
+          data: themeData(),
+          child: Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: left,
+                  ),
+                ),
+              ),
+              Text(
+                    pi.hostname.isNotEmpty ? pi.hostname : widget.id,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.color
+                          ?.withOpacity(0.6),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ).marginOnly(right: 8),
+              _CloseMenu(id: widget.id, ffi: widget.ffi),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBarDivider(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 20,
+      color: Theme.of(context).dividerColor,
+    ).marginSymmetric(horizontal: 6);
+  }
+
+  // Original floating/dockable toolbar, kept for reference (unused).
+  Widget _buildFloatingToolbar(BuildContext context) {
+    return Obx(() {
       if (!widget.state.initialized.value ||
           !_dockingOptionsInitialized.value) {
         return const SizedBox.shrink();
@@ -1546,7 +1663,9 @@ class ScreenAdjustor {
             : 0.0;
         final windowEdge = kWindowBorderWidth + resizePadding;
         horizontalEdges = windowEdge * 2;
-        verticalEdges = kDesktopRemoteTabBarHeight + windowEdge * 2;
+        verticalEdges = kDesktopRemoteTabBarHeight +
+            kDesktopRemoteSessionToolbarHeight +
+            windowEdge * 2;
       } else {
         horizontalEdges = CanvasModel.leftToEdge + CanvasModel.rightToEdge;
         verticalEdges = CanvasModel.topToEdge + CanvasModel.bottomToEdge;
@@ -3057,13 +3176,19 @@ class _IconMenuButtonState extends State<_IconMenuButton> {
   @override
   Widget build(BuildContext context) {
     assert(widget.assetName != null || widget.icon != null);
+    final flat = widget.icon == null && _ToolbarTheme.isFlat(widget.color);
     final icon = widget.icon ??
         SvgPicture.asset(
           widget.assetName!,
-          colorFilter: ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          colorFilter: ColorFilter.mode(
+              flat ? _ToolbarTheme.flatIconColor(context) : Colors.white,
+              BlendMode.srcIn),
           width: _ToolbarTheme.buttonSize,
           height: _ToolbarTheme.buttonSize,
         );
+    final bg = flat
+        ? (hover ? _ToolbarTheme.flatHoverColor(context) : Colors.transparent)
+        : (hover ? widget.hoverColor : widget.color);
     var button = SizedBox(
       width: widget.width ?? _ToolbarTheme.buttonSize,
       height: _ToolbarTheme.buttonSize,
@@ -3084,7 +3209,7 @@ class _IconMenuButtonState extends State<_IconMenuButton> {
                     decoration: BoxDecoration(
                       borderRadius:
                           BorderRadius.circular(_ToolbarTheme.iconRadius),
-                      color: hover ? widget.hoverColor : widget.color,
+                      color: bg,
                     ),
                     child: icon)),
           )),
@@ -3142,13 +3267,19 @@ class _IconSubmenuButtonState extends State<_IconSubmenuButton> {
   @override
   Widget build(BuildContext context) {
     assert(widget.svg != null || widget.icon != null);
+    final flat = widget.icon == null && _ToolbarTheme.isFlat(widget.color);
     final icon = widget.icon ??
         SvgPicture.asset(
           widget.svg!,
-          colorFilter: ColorFilter.mode(Colors.white, BlendMode.srcIn),
+          colorFilter: ColorFilter.mode(
+              flat ? _ToolbarTheme.flatIconColor(context) : Colors.white,
+              BlendMode.srcIn),
           width: _ToolbarTheme.buttonSize,
           height: _ToolbarTheme.buttonSize,
         );
+    final bg = flat
+        ? (hover ? _ToolbarTheme.flatHoverColor(context) : Colors.transparent)
+        : (hover ? widget.hoverColor : widget.color);
     final button = SizedBox(
         width: widget.width ?? _ToolbarTheme.buttonSize,
         height: _ToolbarTheme.buttonSize,
@@ -3167,7 +3298,7 @@ class _IconSubmenuButtonState extends State<_IconSubmenuButton> {
                         decoration: BoxDecoration(
                           borderRadius:
                               BorderRadius.circular(_ToolbarTheme.iconRadius),
-                          color: hover ? widget.hoverColor : widget.color,
+                          color: bg,
                         ),
                         child: icon))),
             menuChildren: widget
