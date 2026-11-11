@@ -746,41 +746,41 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
   }
 
   /// AnyDesk-style toolbar: full width, docked at the top.
-  /// Left: window controls (minimize, fullscreen, close) + peer name.
-  /// Right: session menus.
+  /// Left: peer name. Right: session actions in AnyDesk order
+  /// (chat, file transfer, actions, keyboard, monitor, display),
+  /// then the window controls (minimize, fullscreen, close) at the far right.
   Widget _buildFixedBar(BuildContext context) {
     const edge = _ToolbarEdge.top;
     final List<Widget> left = [];
-    left.add(_IconMenuButton(
-      icon: Icon(IconFont.min,
-          size: 14, color: _ToolbarTheme.flatIconColor(context)),
-      tooltip: 'Minimize',
-      color: _ToolbarTheme.blueColor,
-      hoverColor: _ToolbarTheme.hoverBlueColor,
-      onPressed: _minimize,
-    ));
-    left.add(Obx(() => _IconMenuButton(
-          assetName: stateGlobal.fullscreen.isTrue
-              ? 'assets/fullscreen_exit.svg'
-              : 'assets/fullscreen.svg',
-          tooltip:
-              stateGlobal.fullscreen.isTrue ? 'Exit Fullscreen' : 'Fullscreen',
-          color: _ToolbarTheme.blueColor,
-          hoverColor: _ToolbarTheme.hoverBlueColor,
-          onPressed: () => _setFullscreen(!stateGlobal.fullscreen.value),
-        )));
-    left.add(_CloseMenu(id: widget.id, ffi: widget.ffi));
-    left.add(_buildBarDivider(context));
-    left.add(Text(
-      pi.hostname.isNotEmpty ? pi.hostname : widget.id,
-      style: TextStyle(
-        fontSize: 12,
-        color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6),
+    left.add(ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 240),
+      child: Text(
+        pi.hostname.isNotEmpty ? pi.hostname : widget.id,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color:
+              Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.7),
+        ),
+        overflow: TextOverflow.ellipsis,
       ),
-      overflow: TextOverflow.ellipsis,
-    ).marginOnly(left: 4));
+    ).marginOnly(left: 6));
 
     final List<Widget> right = [];
+    right.add(_ChatMenu(id: widget.id, ffi: widget.ffi));
+    if (!isWeb) {
+      right.add(_VoiceCallMenu(id: widget.id, ffi: widget.ffi));
+    }
+    if (widget.ffi.connType == ConnType.defaultConn && !isWeb) {
+      right.add(_FileTransferButton(id: widget.id, ffi: widget.ffi));
+    }
+    right.add(_ControlMenu(id: widget.id, ffi: widget.ffi, state: widget.state));
+    if (!isWebDesktop) {
+      right.add(_MobileActionMenu(ffi: widget.ffi));
+    }
+    if (widget.ffi.connType == ConnType.defaultConn) {
+      right.add(_KeyboardMenu(id: widget.id, ffi: widget.ffi));
+    }
     right.add(Obx(() {
       final privacyModeState = PrivacyModeState.find(widget.id);
       if ((privacyModeState.isEmpty ||
@@ -795,28 +795,35 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
         return const Offstage();
       }
     }));
-    right.add(_ControlMenu(id: widget.id, ffi: widget.ffi, state: widget.state));
     right.add(_DisplayMenu(
       id: widget.id,
       ffi: widget.ffi,
       state: widget.state,
       setFullscreen: _setFullscreen,
     ));
-    if (widget.ffi.connType == ConnType.defaultConn) {
-      right.add(_KeyboardMenu(id: widget.id, ffi: widget.ffi));
-    }
-    if (!isWebDesktop) {
-      right.add(_MobileActionMenu(ffi: widget.ffi));
-    }
-    right.add(_buildBarDivider(context));
-    if (widget.ffi.connType == ConnType.defaultConn && !isWeb) {
-      right.add(_FileTransferButton(id: widget.id, ffi: widget.ffi));
-    }
-    right.add(_ChatMenu(id: widget.id, ffi: widget.ffi));
     if (!isWeb) {
-      right.add(_VoiceCallMenu(id: widget.id, ffi: widget.ffi));
       right.add(_RecordMenu());
     }
+    right.add(_buildBarDivider(context));
+    right.add(_IconMenuButton(
+      icon: Icon(IconFont.min,
+          size: 14, color: _ToolbarTheme.flatIconColor(context)),
+      tooltip: 'Minimize',
+      color: _ToolbarTheme.blueColor,
+      hoverColor: _ToolbarTheme.hoverBlueColor,
+      onPressed: _minimize,
+    ));
+    right.add(Obx(() => _IconMenuButton(
+          assetName: stateGlobal.fullscreen.isTrue
+              ? 'assets/fullscreen_exit.svg'
+              : 'assets/fullscreen.svg',
+          tooltip:
+              stateGlobal.fullscreen.isTrue ? 'Exit Fullscreen' : 'Fullscreen',
+          color: _ToolbarTheme.blueColor,
+          hoverColor: _ToolbarTheme.hoverBlueColor,
+          onPressed: () => _setFullscreen(!stateGlobal.fullscreen.value),
+        )));
+    right.add(_CloseMenu(id: widget.id, ffi: widget.ffi));
 
     final barColor = Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFF24252B)
