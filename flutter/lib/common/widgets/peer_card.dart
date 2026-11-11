@@ -55,8 +55,10 @@ class _PeerCardState extends State<_PeerCard>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Obx(() =>
-        stateGlobal.isPortrait.isTrue ? _buildPortrait() : _buildLandscape());
+    return Obx(() => stateGlobal.isPortrait.isTrue &&
+            peerCardUiType.value != PeerUiType.grid
+        ? _buildPortrait()
+        : _buildLandscape());
   }
 
   Widget gestureDetector({required Widget child}) {
@@ -316,7 +318,7 @@ class _PeerCardState extends State<_PeerCard>
                               Container(
                                 padding: const EdgeInsets.all(6),
                                 child:
-                                    getPlatformImage(peer.platform, size: 60),
+                                    getPlatformImage(peer.platform, size: 72),
                               ),
                               Row(
                                 children: [

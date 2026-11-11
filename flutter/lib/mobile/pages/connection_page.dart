@@ -149,13 +149,14 @@ class _ConnectionPageState extends State<ConnectionPage> {
   /// Search for a peer and connect to it if the id exists.
   Widget _buildRemoteIDTextField() {
     final w = SizedBox(
-      height: 84,
+      height: 64,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
         child: Ink(
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.all(Radius.circular(13)),
+            borderRadius: BorderRadius.all(Radius.circular(4)),
+            border: Border.all(color: Theme.of(context).dividerColor),
           ),
           child: Row(
             children: <Widget>[
@@ -339,7 +340,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                 height: 60,
                 child: IconButton(
                   icon: const Icon(Icons.arrow_forward,
-                      color: MyTheme.darkGray, size: 45),
+                      color: MyTheme.accent, size: 30),
                   onPressed: onConnect,
                 ),
               ),

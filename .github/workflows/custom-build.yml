@@ -1,0 +1,14 @@
+name: Custom Build (AnyDesk UX)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [anydesk-ux]
+
+jobs:
+  build:
+    uses: ./.github/workflows/flutter-build.yml
+    secrets: inherit
+    with:
+      upload-artifact: true
+      upload-tag: "custom"

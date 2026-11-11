@@ -309,16 +309,19 @@ class _ConnectionPageState extends State<ConnectionPage>
         Expanded(
             child: Column(
           children: [
-            Row(
-              children: [
-                Flexible(child: _buildRemoteIDTextField(context)),
-              ],
-            ).marginOnly(top: 22),
-            SizedBox(height: 12),
-            Divider().paddingOnly(right: 12),
-            Expanded(child: PeerTabPage()),
+            Container(
+              color: Theme.of(context).colorScheme.background,
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  Expanded(child: _buildRemoteIDTextField(context)),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(child: PeerTabPage().paddingOnly(left: 16.0, top: 8.0)),
           ],
-        ).paddingOnly(left: 12.0)),
+        )),
         if (!isOutgoingOnly) const Divider(height: 1),
         if (!isOutgoingOnly) OnlineStatusWidget()
       ],
@@ -377,17 +380,30 @@ class _ConnectionPageState extends State<ConnectionPage>
   /// Search for a peer.
   Widget _buildRemoteIDTextField(BuildContext context) {
     var w = Container(
-      width: 320 + 20 * 2,
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
-      decoration: BoxDecoration(
-          borderRadius: const BorderRadius.all(Radius.circular(13)),
-          border: Border.all(color: Theme.of(context).colorScheme.background)),
+      padding: EdgeInsets.zero,
       child: Ink(
-        child: Column(
+        child: Row(
           children: [
-            getConnectionPageTitle(context, false).marginOnly(bottom: 15),
-            Row(
+            Expanded(
+                child: Container(
+              height: 38,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Theme.of(context).dividerColor),
+              ),
+              child: Row(
               children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Icon(Icons.desktop_windows_outlined,
+                      size: 18,
+                      color: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.color
+                          ?.withOpacity(0.5)),
+                ),
                 Expanded(
                     child: RawAutocomplete<Peer>(
                   optionsBuilder: (TextEditingValue textEditingValue) {
@@ -454,8 +470,8 @@ class _ConnectionPageState extends State<ConnectionPage>
                           focusNode: fieldFocusNode,
                           style: const TextStyle(
                             fontFamily: 'WorkSans',
-                            fontSize: 22,
-                            height: 1.4,
+                            fontSize: 16,
+                            height: 1.2,
                           ),
                           maxLines: 1,
                           cursorColor:
@@ -463,11 +479,15 @@ class _ConnectionPageState extends State<ConnectionPage>
                           decoration: InputDecoration(
                               filled: false,
                               counterText: '',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              isDense: true,
                               hintText: _idInputFocused.value
                                   ? null
                                   : translate('Enter Remote ID'),
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 15, vertical: 13)),
+                                  horizontal: 10, vertical: 10)),
                           controller: fieldTextEditingController,
                           inputFormatters: [IDTextInputFormatter()],
                           onChanged: (v) {
@@ -547,12 +567,12 @@ class _ConnectionPageState extends State<ConnectionPage>
                   },
                 )),
               ],
-            ),
+            ))),
             Padding(
-              padding: const EdgeInsets.only(top: 13.0),
-              child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              padding: const EdgeInsets.only(left: 8.0),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
                 SizedBox(
-                  height: 28.0,
+                  height: 38.0,
                   child: ElevatedButton(
                     onPressed: () {
                       onConnect();
@@ -562,8 +582,8 @@ class _ConnectionPageState extends State<ConnectionPage>
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  height: 28.0,
-                  width: 28.0,
+                  height: 38.0,
+                  width: 38.0,
                   decoration: BoxDecoration(
                     border: Border.all(color: Theme.of(context).dividerColor),
                     borderRadius: BorderRadius.circular(8),
@@ -658,7 +678,6 @@ class _ConnectionPageState extends State<ConnectionPage>
         ),
       ),
     );
-    return Container(
-        constraints: const BoxConstraints(maxWidth: 600), child: w);
+    return w;
   }
 }

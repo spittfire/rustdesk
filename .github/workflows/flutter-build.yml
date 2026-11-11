@@ -897,12 +897,18 @@ jobs:
           # for easy debugging
           flutter build ipa --release --no-codesign
 
-      # - name: Upload Artifacts
-      #   # if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
-      #   uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      #   with:
-      #     name: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
-      #     path: flutter/build/ios/ipa/*.ipa
+      - name: Package unsigned ipa
+        shell: bash
+        run: |
+          mkdir -p flutter/build/ios/ipa/Payload
+          cp -r flutter/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app flutter/build/ios/ipa/Payload/
+          cd flutter/build/ios/ipa && zip -qr rustdesk-unsigned.ipa Payload
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rustdesk-${{ env.VERSION }}-ios-unsigned.ipa
+          path: flutter/build/ios/ipa/*.ipa
 
       # - name: Publish ipa package
       #   # if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'

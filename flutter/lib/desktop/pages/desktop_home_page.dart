@@ -89,7 +89,21 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         alignment: Alignment.center,
         child: loadLogo(),
       ),
-      buildTip(context),
+      if (!isOutgoingOnly)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            translate('Your Desktop'),
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.color
+                    ?.withOpacity(0.6)),
+          ).marginOnly(left: 20, top: 16, bottom: 4),
+        ),
       if (!isOutgoingOnly) buildIDBoard(context),
       if (!isOutgoingOnly) buildPasswordBoard(context),
       FutureBuilder<Widget>(
@@ -129,7 +143,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     return ChangeNotifierProvider.value(
       value: gFFI.serverModel,
       child: Container(
-        width: isIncomingOnly ? 280.0 : 200.0,
+        width: isIncomingOnly ? 280.0 : 260.0,
         color: Theme.of(context).colorScheme.background,
         child: Stack(
           children: [
@@ -239,7 +253,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                           contentPadding: EdgeInsets.only(top: 10, bottom: 10),
                         ),
                         style: TextStyle(
-                          fontSize: 22,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w600,
+                          color: MyTheme.accent,
                         ),
                       ).workaroundFreezeLinuxMint(),
                     ),

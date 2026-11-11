@@ -254,7 +254,7 @@ class _PeersViewState extends State<_PeersView>
                       ? Container(height: 45, child: visibilityChild)
                       : peerCardUiType.value == PeerUiType.grid
                           ? SizedBox(
-                              width: 220, height: 140, child: visibilityChild)
+                              width: 280, height: 190, child: visibilityChild)
                           : SizedBox(
                               width: 220, height: 42, child: visibilityChild))
                   : Container(child: visibilityChild);
@@ -263,7 +263,21 @@ class _PeersViewState extends State<_PeersView>
             // We should avoid too many rebuilds. Win10(Some machines) on Flutter 3.19.6.
             // Continious rebuilds of `ListView.builder` will cause memory leak.
             // Simple demo can reproduce this issue.
-            final Widget child = Obx(() => stateGlobal.isPortrait.isTrue
+            final Widget child = Obx(() => stateGlobal.isPortrait.isTrue &&
+                    peerCardUiType.value == PeerUiType.grid
+                ? GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 280 / 190),
+                    itemCount: peers.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      return buildOnePeer(peers[index], true);
+                    },
+                  )
+                : stateGlobal.isPortrait.isTrue
                 ? ListView.builder(
                     itemCount: peers.length,
                     itemBuilder: (BuildContext context, int index) {
