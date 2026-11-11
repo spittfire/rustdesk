@@ -738,6 +738,9 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       left.add(_MobileActionMenu(ffi: widget.ffi));
     }
     left.add(_buildBarDivider(context));
+    if (widget.ffi.connType == ConnType.defaultConn && !isWeb) {
+      left.add(_FileTransferButton(id: widget.id, ffi: widget.ffi));
+    }
     left.add(_ChatMenu(id: widget.id, ffi: widget.ffi));
     if (!isWeb) {
       left.add(_VoiceCallMenu(id: widget.id, ffi: widget.ffi));
@@ -3114,6 +3117,36 @@ class _RecordMenu extends StatelessWidget {
       hoverColor: recordingModel.start
           ? _ToolbarTheme.hoverRedColor
           : _ToolbarTheme.hoverBlueColor,
+    );
+  }
+}
+
+/// Opens file transfer for the current peer, reusing the session token
+/// so no second password prompt is needed.
+class _FileTransferButton extends StatelessWidget {
+  final String id;
+  final FFI ffi;
+  const _FileTransferButton({Key? key, required this.id, required this.ffi})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return _IconMenuButton(
+      assetName: 'assets/file_transfer.svg',
+      tooltip: 'Transfer file',
+      color: _ToolbarTheme.blueColor,
+      hoverColor: _ToolbarTheme.hoverBlueColor,
+      onPressed: () {
+        final connToken = bind.sessionGetConnToken(sessionId: ffi.sessionId);
+        connect(context, id,
+            loginMethod: bind.sessionGetCommonSync(
+                    sessionId: ffi.sessionId,
+                    key: 'login_method',
+                    param: '') ??
+                '',
+            isFileTransfer: true,
+            connToken: connToken);
+      },
     );
   }
 }

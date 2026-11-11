@@ -1087,7 +1087,11 @@ class FfiModel with ChangeNotifier {
       }
       msgBox(sessionId, type, title, text, link, dialogManager,
           hasCancel: hasCancel,
-          reconnect: hasRetry ? reconnect : null,
+          // Always offer a manual "Reconnect" on connection errors;
+          // the countdown (auto-retry) only when the server asks for it.
+          reconnect: (hasRetry || title == "Connection Error")
+              ? reconnect
+              : null,
           reconnectTimeout: hasRetry ? _reconnects : null,
           onSubmit: onSubmit);
     }

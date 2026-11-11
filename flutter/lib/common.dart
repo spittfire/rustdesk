@@ -1296,6 +1296,20 @@ void msgBox(SessionID sessionId, String type, String title, String text,
         ));
     buttons.insert(0, button);
   }
+  if (reconnect != null &&
+      title == "Connection Error" &&
+      reconnectTimeout == null) {
+    final enabled = true.obs;
+    buttons.insert(
+        0,
+        Obx(() => dialogButton('Reconnect',
+            onPressed: enabled.isTrue
+                ? () {
+                    enabled.value = false;
+                    reconnect(dialogManager, sessionId, false);
+                  }
+                : null)));
+  }
   if (link.isNotEmpty) {
     buttons.insert(0, dialogButton('JumpLink', onPressed: jumplink));
   }
