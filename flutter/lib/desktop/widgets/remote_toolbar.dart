@@ -725,10 +725,8 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
             : MouseRegion(
                 opaque: false,
                 hitTestBehavior: HitTestBehavior.opaque,
-                onEnter: (_) {
-                  ++_fsHideSerial;
-                  _fsBarVisible.value = true;
-                },
+                onEnter: (_) => _scheduleFsShow(),
+                onExit: (_) => ++_fsShowSerial,
                 child: const SizedBox(
                     width: double.infinity, height: kFsToolbarHotZone),
               )),
@@ -737,8 +735,22 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
   }
 
   static const double kFsToolbarHotZone = 3.0;
+  static const Duration kFsShowDelay = Duration(milliseconds: 600);
   final RxBool _fsBarVisible = false.obs;
   int _fsHideSerial = 0;
+  int _fsShowSerial = 0;
+
+  // Show only after the pointer has rested on the top edge for a moment,
+  // so brushing the edge while working does not pop the bar up.
+  void _scheduleFsShow() {
+    final serial = ++_fsShowSerial;
+    Future.delayed(kFsShowDelay, () {
+      if (!mounted || serial != _fsShowSerial) return;
+      if (stateGlobal.fullscreen.isFalse) return;
+      ++_fsHideSerial;
+      _fsBarVisible.value = true;
+    });
+  }
 
   // Hide with a short grace period so moving into an open submenu
   // (rendered outside the bar) does not collapse the bar immediately.
