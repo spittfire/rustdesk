@@ -74,6 +74,7 @@ class _PeerTabPageState extends State<PeerTabPage>
 
   _PeerTabPageState() {
     _loadLocalOptions();
+    FavIds.load();
   }
 
   void _loadLocalOptions() {
@@ -158,6 +159,24 @@ class _PeerTabPageState extends State<PeerTabPage>
             bottom: BorderSide(width: 2, color: color!),
           ));
           counter += 1;
+          // Desktop: AnyDesk-like text tabs; mobile keeps the icons.
+          final Widget label = (isDesktop || isWebDesktop)
+              ? Text(
+                  model.tabTooltip(t),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    color: selected ? MyTheme.accent : color,
+                  ),
+                ).paddingSymmetric(horizontal: 6, vertical: 6)
+              : Icon(model.tabIcon(t), color: color)
+                  .paddingSymmetric(horizontal: 4);
+          final selectedDeco = (isDesktop || isWebDesktop)
+              ? const BoxDecoration(
+                  border: Border(
+                  bottom: BorderSide(width: 2, color: MyTheme.accent),
+                ))
+              : decoBorder;
           return ReorderableDragStartListener(
               key: ValueKey(t),
               index: counter,
@@ -168,10 +187,9 @@ class _PeerTabPageState extends State<PeerTabPage>
                     child: InkWell(
                       child: Container(
                         decoration: (hover.value
-                            ? (selected ? decoBorder : deco)
-                            : (selected ? decoBorder : null)),
-                        child: Icon(model.tabIcon(t), color: color)
-                            .paddingSymmetric(horizontal: 4),
+                            ? (selected ? selectedDeco : deco)
+                            : (selected ? selectedDeco : null)),
+                        child: label,
                       ).paddingSymmetric(horizontal: 4),
                       onTap: isOptionFixed(kOptionPeerTabIndex)
                           ? null
@@ -203,6 +221,28 @@ class _PeerTabPageState extends State<PeerTabPage>
         });
         child = entries[0].widget;
       }
+    }
+    if (isDesktop || isWebDesktop) {
+      // Section header like AnyDesk: icon, title, rule.
+      final textColor =
+          Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6);
+      final header = model.visibleEnabledOrderedIndexs.contains(model.currentTab)
+          ? Row(children: [
+              Icon(model.tabIcon(model.currentTab), size: 14, color: textColor),
+              const SizedBox(width: 6),
+              Text(model.tabTooltip(model.currentTab),
+                  style: TextStyle(fontSize: 12, color: textColor)),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Container(
+                      height: 1, color: Theme.of(context).dividerColor)),
+            ]).paddingOnly(right: 12, top: 10, bottom: 10)
+          : const SizedBox.shrink();
+      return Expanded(
+          child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [header, Expanded(child: child)],
+      ));
     }
     return Expanded(
         child: child.marginSymmetric(

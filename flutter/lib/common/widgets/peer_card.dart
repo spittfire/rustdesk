@@ -24,6 +24,25 @@ enum PeerUiType { grid, tile, list }
 
 final peerCardUiType = PeerUiType.grid.obs;
 
+/// Favourite ids, kept in sync so cards can show a toggleable star.
+class FavIds {
+  static final RxSet<String> ids = <String>{}.obs;
+
+  static Future<void> load() async {
+    ids.assignAll(await bind.mainGetFav());
+  }
+
+  static Future<void> toggle(String id) async {
+    final favs = (await bind.mainGetFav()).toList();
+    if (!favs.remove(id)) {
+      favs.add(id);
+    }
+    await bind.mainStoreFav(favs: favs);
+    await bind.mainLoadFavPeers();
+    await load();
+  }
+}
+
 bool? hideUsernameOnCard;
 
 class _PeerCard extends StatefulWidget {
@@ -48,9 +67,10 @@ class _PeerCard extends StatefulWidget {
 class _PeerCardState extends State<_PeerCard>
     with AutomaticKeepAliveClientMixin {
   var _menuPos = RelativeRect.fill;
-  final double _cardRadius = 16;
-  final double _tileRadius = 5;
-  final double _borderWidth = 2;
+  // Flat, square cards (AnyDesk style).
+  final double _cardRadius = 0;
+  final double _tileRadius = 0;
+  final double _borderWidth = 1;
 
   @override
   Widget build(BuildContext context) {
@@ -301,86 +321,112 @@ class _PeerCardState extends State<_PeerCard>
         () => Container(
           foregroundDecoration: deco.value,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(_cardRadius - _borderWidth),
+            borderRadius: BorderRadius.circular(_cardRadius),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // Preview area: platform glyph, online dot top-left,
+                // favourite star top-right.
                 Expanded(
                   child: Container(
                     color: str2color('${peer.id}${peer.platform}', 0x7f),
-                    child: Row(
+                    child: Stack(
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                child:
-                                    getPlatformImage(peer.platform, size: 72),
-                              ),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Tooltip(
-                                      message: name,
-                                      waitDuration: const Duration(seconds: 1),
-                                      child: Text(
-                                        name,
-                                        style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12),
-                                        textAlign: TextAlign.center,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (_showNote(peer))
-                                Row(
-                                  children: [
-                                    Expanded(
-                                        child: Tooltip(
-                                      message: peer.note,
-                                      waitDuration: const Duration(seconds: 1),
-                                      child: Text(
-                                        peer.note,
-                                        style: const TextStyle(
-                                            color: Colors.white38,
-                                            fontSize: 10),
-                                        textAlign: TextAlign.center,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ))
-                                  ],
-                                ),
-                            ],
-                          ).paddingOnly(top: 4.0, left: 4.0, right: 4.0),
+                        Center(
+                          child: getPlatformImage(peer.platform, size: 48),
                         ),
+                        Positioned(
+                          top: 6,
+                          left: 8,
+                          child: Tooltip(
+                            message:
+                                translate(peer.online ? 'Online' : 'Offline'),
+                            waitDuration: const Duration(seconds: 1),
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                  color: peer.online
+                                      ? Colors.green
+                                      : kColorWarn,
+                                  shape: BoxShape.circle),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: _buildFavStar(peer),
+                        ),
+                        if (_showNote(peer))
+                          Positioned(
+                            left: 8,
+                            right: 8,
+                            bottom: 4,
+                            child: Tooltip(
+                              message: peer.note,
+                              waitDuration: const Duration(seconds: 1),
+                              child: Text(
+                                peer.note,
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 10),
+                                textAlign: TextAlign.center,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ),
+                // Footer: monitor glyph, alias/id with the name below, menu.
                 Container(
                   color: Theme.of(context).colorScheme.background,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      Icon(Icons.desktop_windows_outlined,
+                          size: 14,
+                          color: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.color
+                              ?.withOpacity(0.7)),
+                      const SizedBox(width: 6),
                       Expanded(
-                          child: Row(children: [
-                        getOnline(8, peer.online),
-                        Expanded(
+                          child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            peer.alias.isEmpty
+                                ? formatID(peer.id)
+                                : peer.alias,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          Tooltip(
+                            message: name,
+                            waitDuration: const Duration(seconds: 1),
                             child: Text(
-                          peer.alias.isEmpty ? formatID(peer.id) : peer.alias,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        )),
-                      ]).paddingSymmetric(vertical: 8)),
+                              peer.alias.isEmpty ? name : formatID(peer.id),
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .titleLarge
+                                      ?.color
+                                      ?.withOpacity(0.6)),
+                            ),
+                          ),
+                        ],
+                      ).paddingSymmetric(vertical: 6)),
                       checkBoxOrActionMoreLandscape(peer, isTile: false),
                     ],
-                  ).paddingSymmetric(horizontal: 12.0),
+                  ).paddingOnly(left: 10.0, right: 4.0),
                 )
               ],
             ),
@@ -414,6 +460,31 @@ class _PeerCardState extends State<_PeerCard>
           )
       ]),
     );
+  }
+
+  Widget _buildFavStar(Peer peer) {
+    final hover = false.obs;
+    return Obx(() {
+      final isFav = FavIds.ids.contains(peer.id);
+      return Tooltip(
+        message: translate(isFav ? 'Remove from Favorites' : 'Add to Favorites'),
+        waitDuration: const Duration(seconds: 1),
+        child: InkWell(
+          onTap: () => FavIds.toggle(peer.id),
+          onHover: (v) => hover.value = v,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Icon(
+              isFav ? Icons.star : Icons.star_border,
+              size: 16,
+              color: isFav
+                  ? MyTheme.accent
+                  : (hover.value ? Colors.white : Colors.white70),
+            ),
+          ),
+        ),
+      );
+    });
   }
 
   List _frontN<T>(List list, int n) {

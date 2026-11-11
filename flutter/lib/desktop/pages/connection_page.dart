@@ -2,11 +2,11 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common/widgets/connection_page_title.dart';
 import 'package:flutter_hbb/consts.dart';
+import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/desktop/widgets/popup_menu.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
@@ -189,7 +189,10 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
 
 /// Connection page for connecting to a remote peer.
 class ConnectionPage extends StatefulWidget {
-  const ConnectionPage({Key? key}) : super(key: key);
+  /// Optional block rendered between the address bar and the peer tabs
+  /// (the "your address" header of the AnyDesk-style home page).
+  final Widget? header;
+  const ConnectionPage({Key? key, this.header}) : super(key: key);
 
   @override
   State<ConnectionPage> createState() => _ConnectionPageState();
@@ -309,17 +312,17 @@ class _ConnectionPageState extends State<ConnectionPage>
         Expanded(
             child: Column(
           children: [
+            // Full-width address bar, flat, AnyDesk style.
             Container(
+              height: 34,
               color: Theme.of(context).colorScheme.background,
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              child: Row(
-                children: [
-                  Expanded(child: _buildRemoteIDTextField(context)),
-                ],
-              ),
+              padding: const EdgeInsets.only(left: 10, right: 4),
+              child: _buildRemoteIDTextField(context),
             ),
             const Divider(height: 1),
-            Expanded(child: PeerTabPage().paddingOnly(left: 16.0, top: 8.0)),
+            if (widget.header != null) widget.header!,
+            Expanded(
+                child: PeerTabPage().paddingOnly(left: 16.0, top: 4.0)),
           ],
         )),
         if (!isOutgoingOnly) const Divider(height: 1),
@@ -378,32 +381,79 @@ class _ConnectionPageState extends State<ConnectionPage>
 
   /// UI for the remote ID TextField.
   /// Search for a peer.
+  // Service status dot at the left end of the address bar.
+  Widget _buildStatusDot() {
+    final svcStopped = Get.find<RxBool>(tag: 'stop-service');
+    return Obx(() {
+      final Color color;
+      final String tip;
+      if (svcStopped.value) {
+        color = Colors.grey;
+        tip = 'Service is not running';
+      } else if (stateGlobal.svcStatus.value == SvcStatus.ready) {
+        color = Colors.green;
+        tip = 'Ready';
+      } else if (stateGlobal.svcStatus.value == SvcStatus.connecting) {
+        color = Colors.orange;
+        tip = 'connecting_status';
+      } else {
+        color = kColorWarn;
+        tip = 'not_ready_status';
+      }
+      return Tooltip(
+        message: translate(tip),
+        child: Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+      );
+    }).marginOnly(right: 8);
+  }
+
+  // Flat, square icon button for the address bar.
+  Widget _buildBarIcon(BuildContext context,
+      {required IconData icon,
+      required String tooltip,
+      required VoidCallback onTap,
+      GestureTapDownCallback? onTapDown,
+      double size = 18}) {
+    final hover = false.obs;
+    final iconColor =
+        Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.75);
+    return Tooltip(
+      message: translate(tooltip),
+      child: InkWell(
+        onTap: onTap,
+        onTapDown: onTapDown,
+        onHover: (v) => hover.value = v,
+        child: Obx(() => Container(
+              width: 30,
+              height: 30,
+              color: hover.value
+                  ? (Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.black.withOpacity(0.07))
+                  : Colors.transparent,
+              child: Icon(icon, size: size, color: iconColor),
+            )),
+      ),
+    );
+  }
+
   Widget _buildRemoteIDTextField(BuildContext context) {
     var w = Container(
       padding: EdgeInsets.zero,
       child: Ink(
         child: Row(
           children: [
+            _buildStatusDot(),
             Expanded(
                 child: Container(
-              height: 38,
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Theme.of(context).dividerColor),
-              ),
+              height: 34,
+              color: Colors.transparent,
               child: Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 10),
-                  child: Icon(Icons.desktop_windows_outlined,
-                      size: 18,
-                      color: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.color
-                          ?.withOpacity(0.5)),
-                ),
                 Expanded(
                     child: RawAutocomplete<Peer>(
                   optionsBuilder: (TextEditingValue textEditingValue) {
@@ -470,7 +520,7 @@ class _ConnectionPageState extends State<ConnectionPage>
                           focusNode: fieldFocusNode,
                           style: const TextStyle(
                             fontFamily: 'WorkSans',
-                            fontSize: 16,
+                            fontSize: 14,
                             height: 1.2,
                           ),
                           maxLines: 1,
@@ -487,7 +537,7 @@ class _ConnectionPageState extends State<ConnectionPage>
                                   ? null
                                   : translate('Enter Remote ID'),
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 10)),
+                                  horizontal: 0, vertical: 8)),
                           controller: fieldTextEditingController,
                           inputFormatters: [IDTextInputFormatter()],
                           onChanged: (v) {
@@ -568,112 +618,81 @@ class _ConnectionPageState extends State<ConnectionPage>
                 )),
               ],
             ))),
-            Padding(
-              padding: const EdgeInsets.only(left: 8.0),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                SizedBox(
-                  height: 38.0,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      onConnect();
-                    },
-                    child: Text(translate("Connect")),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  height: 38.0,
-                  width: 38.0,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Theme.of(context).dividerColor),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: StatefulBuilder(
-                      builder: (context, setState) {
-                        var offset = Offset(0, 0);
-                        return Obx(() => InkWell(
-                              child: _menuOpen.value
-                                  ? Transform.rotate(
-                                      angle: pi,
-                                      child: Icon(IconFont.more, size: 14),
-                                    )
-                                  : Icon(IconFont.more, size: 14),
-                              onTapDown: (e) {
-                                offset = e.globalPosition;
-                              },
-                              onTap: () async {
-                                _menuOpen.value = true;
-                                final x = offset.dx;
-                                final y = offset.dy;
-                                await mod_menu
-                                    .showMenu(
-                                  context: context,
-                                  position: RelativeRect.fromLTRB(x, y, x, y),
-                                  items: [
-                                    (
-                                      'Transfer file',
-                                      () => onConnect(isFileTransfer: true)
-                                    ),
-                                    (
-                                      'View camera',
-                                      () => onConnect(isViewCamera: true)
-                                    ),
-                                    (
-                                      '${translate('Terminal')} (beta)',
-                                      () => onConnect(isTerminal: true)
-                                    ),
-                                    // `connect` routes this through the
-                                    // desktop path only; the peer card gates
-                                    // it the same way.
-                                    if (isDesktop)
-                                      (
-                                        'TCP tunneling',
-                                        () => onConnect(isTcpTunneling: true)
-                                      ),
-                                  ]
-                                      .map<MenuEntryBase<String>>(
-                                          (e) => MenuEntryButton<String>(
-                                            childBuilder: (TextStyle? style) =>
-                                                Text(
-                                              translate(e.$1),
-                                              style: style,
-                                            ),
-                                            proc: () => e.$2(),
-                                            padding: EdgeInsets.symmetric(
-                                                horizontal:
-                                                    kDesktopMenuPadding.left),
-                                            dismissOnClicked: true,
-                                          ))
-                                      .followedBy([
-                                        MenuEntryDivider<String>(),
-                                        _requestApprovalMenu(context),
-                                      ])
-                                      .map((e) => e.build(
-                                          context,
-                                          const MenuConfig(
-                                              commonColor: CustomPopupMenuTheme
-                                                  .commonColor,
-                                              height:
-                                                  CustomPopupMenuTheme.height,
-                                              dividerHeight:
-                                                  CustomPopupMenuTheme
-                                                      .dividerHeight)))
-                                      .expand((i) => i)
-                                      .toList(),
-                                  elevation: 8,
-                                )
-                                    .then((_) {
-                                  _menuOpen.value = false;
-                                });
-                              },
-                            ));
-                      },
-                    ),
-                  ),
-                ),
-              ]),
-            ),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              _buildBarIcon(context,
+                  icon: Icons.drive_file_move_outline,
+                  tooltip: 'Transfer file',
+                  onTap: () => onConnect(isFileTransfer: true)),
+              _buildBarIcon(context,
+                  icon: Icons.arrow_forward,
+                  tooltip: 'Connect',
+                  onTap: () => onConnect()),
+              StatefulBuilder(
+                builder: (context, setState) {
+                  var offset = Offset(0, 0);
+                  return _buildBarIcon(context,
+                      icon: Icons.more_vert,
+                      tooltip: 'More',
+                      onTapDown: (e) => offset = e.globalPosition,
+                      onTap: () async {
+                        _menuOpen.value = true;
+                        final x = offset.dx;
+                        final y = offset.dy;
+                        await mod_menu
+                            .showMenu(
+                          context: context,
+                          position: RelativeRect.fromLTRB(x, y, x, y),
+                          items: [
+                            ('Transfer file', () => onConnect(isFileTransfer: true)),
+                            ('View camera', () => onConnect(isViewCamera: true)),
+                            (
+                              '${translate('Terminal')} (beta)',
+                              () => onConnect(isTerminal: true)
+                            ),
+                            // `connect` routes this through the desktop
+                            // path only; the peer card gates it the same way.
+                            if (isDesktop)
+                              ('TCP tunneling', () => onConnect(isTcpTunneling: true)),
+                          ]
+                              .map<MenuEntryBase<String>>(
+                                  (e) => MenuEntryButton<String>(
+                                        childBuilder: (TextStyle? style) => Text(
+                                          translate(e.$1),
+                                          style: style,
+                                        ),
+                                        proc: () => e.$2(),
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: kDesktopMenuPadding.left),
+                                        dismissOnClicked: true,
+                                      ))
+                              .followedBy([
+                                MenuEntryDivider<String>(),
+                                _requestApprovalMenu(context),
+                              ])
+                              .map((e) => e.build(
+                                  context,
+                                  const MenuConfig(
+                                      commonColor:
+                                          CustomPopupMenuTheme.commonColor,
+                                      height: CustomPopupMenuTheme.height,
+                                      dividerHeight:
+                                          CustomPopupMenuTheme.dividerHeight)))
+                              .expand((i) => i)
+                              .toList(),
+                          elevation: 8,
+                        )
+                            .then((_) {
+                          _menuOpen.value = false;
+                        });
+                      });
+                },
+              ),
+              if (!bind.isDisableSettings())
+                _buildBarIcon(context,
+                    icon: Icons.menu,
+                    tooltip: 'Settings',
+                    onTap: DesktopTabPage.onAddSetting),
+            ]),
           ],
         ),
       ),

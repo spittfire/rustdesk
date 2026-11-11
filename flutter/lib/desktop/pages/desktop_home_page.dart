@@ -6,6 +6,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
+import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/common/widgets/animated_rotation_widget.dart';
 import 'package:flutter_hbb/common/widgets/custom_password.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -59,15 +60,146 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   Widget build(BuildContext context) {
     super.build(context);
     final isIncomingOnly = bind.isIncomingOnly();
+    if (isIncomingOnly) {
+      return _buildBlock(child: buildLeftPane(context));
+    }
+    // AnyDesk-style home: address bar on top, own address centred below,
+    // then the peer tabs. No side pane, no promo cards.
+    final isOutgoingOnly = bind.isOutgoingOnly();
     return _buildBlock(
-        child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        buildLeftPane(context),
-        if (!isIncomingOnly) const VerticalDivider(width: 1),
-        if (!isIncomingOnly) Expanded(child: buildRightPane(context)),
-      ],
+        child: Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: ConnectionPage(
+        header: isOutgoingOnly ? null : buildAddressHeader(context),
+      ),
     ));
+  }
+
+  /// "Your address": big ID in the accent colour, info tooltip, copy,
+  /// one-time password below with refresh / edit.
+  Widget buildAddressHeader(BuildContext context) {
+    final model = gFFI.serverModel;
+    final textColor = Theme.of(context).textTheme.titleLarge?.color;
+    final mutedColor = textColor?.withOpacity(0.6);
+    return ChangeNotifierProvider.value(
+      value: model,
+      child: Consumer<ServerModel>(
+        builder: (context, model, child) {
+          final showOneTime = model.approveMode != 'click' &&
+              model.verificationMethod != kUsePermanentPassword;
+          copyId() {
+            Clipboard.setData(ClipboardData(text: model.serverId.text));
+            showToast(translate("Copied"));
+          }
+
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 22, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                buildPresetPasswordWarning(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      translate('Your Desktop'),
+                      style: TextStyle(fontSize: 15, color: mutedColor),
+                    ).marginOnly(right: 14),
+                    GestureDetector(
+                      onTap: copyId,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: model.serverId,
+                          builder: (_, v, __) => Text(
+                            formatID(v.text),
+                            style: const TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w600,
+                              color: MyTheme.accent,
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Tooltip(
+                      message: translate('desk_tip'),
+                      child: Icon(Icons.info_outline,
+                          size: 16, color: mutedColor),
+                    ).marginOnly(left: 10),
+                    Tooltip(
+                      message: translate('Copy'),
+                      child: InkWell(
+                        onTap: copyId,
+                        child: Icon(Icons.copy, size: 16, color: mutedColor)
+                            .paddingAll(4),
+                      ),
+                    ).marginOnly(left: 4),
+                  ],
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      translate("One-time Password"),
+                      style: TextStyle(fontSize: 12, color: mutedColor),
+                    ).marginOnly(right: 8),
+                    GestureDetector(
+                      onTap: () {
+                        if (showOneTime) {
+                          Clipboard.setData(
+                              ClipboardData(text: model.serverPasswd.text));
+                          showToast(translate("Copied"));
+                        }
+                      },
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: model.serverPasswd,
+                          builder: (_, v, __) => Text(
+                            v.text,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: MyTheme.accent,
+                              fontFeatures: [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (showOneTime)
+                      AnimatedRotationWidget(
+                        onPressed: () => bind.mainUpdateTemporaryPassword(),
+                        child: Tooltip(
+                          message: translate('Refresh Password'),
+                          child: RotatedBox(
+                              quarterTurns: 2,
+                              child: Icon(Icons.refresh,
+                                  color: mutedColor, size: 16)),
+                        ),
+                      ).marginOnly(left: 8),
+                    if (!bind.isDisableSettings())
+                      Tooltip(
+                        message: translate('Change Password'),
+                        child: InkWell(
+                          onTap: () => DesktopSettingPage.switch2page(
+                              SettingsTabKey.safety),
+                          child: Icon(Icons.edit, color: mutedColor, size: 16)
+                              .paddingAll(4),
+                        ),
+                      ).marginOnly(left: 4),
+                  ],
+                ).marginOnly(top: 6),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildBlock({required Widget child}) {
