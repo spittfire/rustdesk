@@ -5,6 +5,9 @@ on:
   push:
     branches: [anydesk-ux]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     uses: ./.github/workflows/flutter-build.yml
