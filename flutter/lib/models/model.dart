@@ -2336,7 +2336,12 @@ class CanvasModel with ChangeNotifier {
       isDesktop ? windowBorderWidth + kDragToResizeAreaPadding.right : 0;
   // Height of the fixed session toolbar above the remote image.
   // Set by the desktop remote page; 0 for other canvas users (e.g. camera).
-  static double sessionToolbarHeight = 0;
+  static double _sessionToolbarHeight = 0;
+  static set sessionToolbarHeight(double v) => _sessionToolbarHeight = v;
+  // In fullscreen the toolbar overlays the image (auto-hide), so it takes
+  // no layout space.
+  static double get sessionToolbarHeight =>
+      stateGlobal.fullscreen.isTrue ? 0 : _sessionToolbarHeight;
   static double get topToEdge => isDesktop
       ? tabBarHeight +
           sessionToolbarHeight +

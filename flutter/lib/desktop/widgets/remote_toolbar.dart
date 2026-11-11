@@ -336,10 +336,10 @@ class _ToolbarTheme {
   static const double height = 20.0;
   static const double dividerHeight = 12.0;
 
-  static const double buttonSize = 32;
+  static const double buttonSize = 24;
   static const double buttonHMargin = 2;
-  static const double buttonVMargin = 6;
-  static const double iconRadius = 8;
+  static const double buttonVMargin = 4;
+  static const double iconRadius = 4;
   static const double elevation = 3;
 
   static double dividerSpaceToAction = isWindows ? 8 : 14;
@@ -381,7 +381,9 @@ class _ToolbarTheme {
           ? Colors.white.withOpacity(0.08)
           : Colors.black.withOpacity(0.07);
 
-  static bool isFlat(Color c) => c == blueColor || c == hoverBlueColor;
+  // The fixed bar renders every button flat: no filled background,
+  // tinted icon, subtle hover.
+  static bool isFlat(Color c) => true;
 
   static Widget borderWrapper(
       BuildContext context, Widget child, BorderRadius borderRadius) {
@@ -699,18 +701,87 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
       if (!widget.state.initialized.value) {
         return const SizedBox.shrink();
       }
+      if (stateGlobal.fullscreen.isFalse) {
+        return Align(
+          alignment: Alignment.topCenter,
+          child: _buildFixedBar(context),
+        );
+      }
+      // Fullscreen: bar is hidden, slides in when the pointer touches the
+      // top edge and hides again when it leaves the bar.
       return Align(
         alignment: Alignment.topCenter,
-        child: _buildFixedBar(context),
+        child: Obx(() => _fsBarVisible.isTrue
+            ? MouseRegion(
+                onEnter: (_) => ++_fsHideSerial,
+                onExit: (_) => _scheduleFsHide(),
+                child: _buildFixedBar(context),
+              )
+            : MouseRegion(
+                opaque: false,
+                hitTestBehavior: HitTestBehavior.opaque,
+                onEnter: (_) {
+                  ++_fsHideSerial;
+                  _fsBarVisible.value = true;
+                },
+                child: const SizedBox(
+                    width: double.infinity, height: kFsToolbarHotZone),
+              )),
       );
     });
   }
 
-  /// AnyDesk-style toolbar: full width, docked at the top, never collapses.
+  static const double kFsToolbarHotZone = 3.0;
+  final RxBool _fsBarVisible = false.obs;
+  int _fsHideSerial = 0;
+
+  // Hide with a short grace period so moving into an open submenu
+  // (rendered outside the bar) does not collapse the bar immediately.
+  void _scheduleFsHide() {
+    final serial = ++_fsHideSerial;
+    Future.delayed(const Duration(milliseconds: 700), () {
+      if (!mounted || serial != _fsHideSerial) return;
+      if (stateGlobal.fullscreen.isTrue) _fsBarVisible.value = false;
+    });
+  }
+
+  /// AnyDesk-style toolbar: full width, docked at the top.
+  /// Left: window controls (minimize, fullscreen, close) + peer name.
+  /// Right: session menus.
   Widget _buildFixedBar(BuildContext context) {
     const edge = _ToolbarEdge.top;
     final List<Widget> left = [];
-    left.add(Obx(() {
+    left.add(_IconMenuButton(
+      icon: Icon(IconFont.min,
+          size: 14, color: _ToolbarTheme.flatIconColor(context)),
+      tooltip: 'Minimize',
+      color: _ToolbarTheme.blueColor,
+      hoverColor: _ToolbarTheme.hoverBlueColor,
+      onPressed: _minimize,
+    ));
+    left.add(Obx(() => _IconMenuButton(
+          assetName: stateGlobal.fullscreen.isTrue
+              ? 'assets/fullscreen_exit.svg'
+              : 'assets/fullscreen.svg',
+          tooltip:
+              stateGlobal.fullscreen.isTrue ? 'Exit Fullscreen' : 'Fullscreen',
+          color: _ToolbarTheme.blueColor,
+          hoverColor: _ToolbarTheme.hoverBlueColor,
+          onPressed: () => _setFullscreen(!stateGlobal.fullscreen.value),
+        )));
+    left.add(_CloseMenu(id: widget.id, ffi: widget.ffi));
+    left.add(_buildBarDivider(context));
+    left.add(Text(
+      pi.hostname.isNotEmpty ? pi.hostname : widget.id,
+      style: TextStyle(
+        fontSize: 12,
+        color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6),
+      ),
+      overflow: TextOverflow.ellipsis,
+    ).marginOnly(left: 4));
+
+    final List<Widget> right = [];
+    right.add(Obx(() {
       final privacyModeState = PrivacyModeState.find(widget.id);
       if ((privacyModeState.isEmpty ||
               allowDisplaySwitchInPrivacyMode(pi, privacyModeState.value)) &&
@@ -724,27 +795,27 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
         return const Offstage();
       }
     }));
-    left.add(_ControlMenu(id: widget.id, ffi: widget.ffi, state: widget.state));
-    left.add(_DisplayMenu(
+    right.add(_ControlMenu(id: widget.id, ffi: widget.ffi, state: widget.state));
+    right.add(_DisplayMenu(
       id: widget.id,
       ffi: widget.ffi,
       state: widget.state,
       setFullscreen: _setFullscreen,
     ));
     if (widget.ffi.connType == ConnType.defaultConn) {
-      left.add(_KeyboardMenu(id: widget.id, ffi: widget.ffi));
+      right.add(_KeyboardMenu(id: widget.id, ffi: widget.ffi));
     }
     if (!isWebDesktop) {
-      left.add(_MobileActionMenu(ffi: widget.ffi));
+      right.add(_MobileActionMenu(ffi: widget.ffi));
     }
-    left.add(_buildBarDivider(context));
+    right.add(_buildBarDivider(context));
     if (widget.ffi.connType == ConnType.defaultConn && !isWeb) {
-      left.add(_FileTransferButton(id: widget.id, ffi: widget.ffi));
+      right.add(_FileTransferButton(id: widget.id, ffi: widget.ffi));
     }
-    left.add(_ChatMenu(id: widget.id, ffi: widget.ffi));
+    right.add(_ChatMenu(id: widget.id, ffi: widget.ffi));
     if (!isWeb) {
-      left.add(_VoiceCallMenu(id: widget.id, ffi: widget.ffi));
-      left.add(_RecordMenu());
+      right.add(_VoiceCallMenu(id: widget.id, ffi: widget.ffi));
+      right.add(_RecordMenu());
     }
 
     final barColor = Theme.of(context).brightness == Brightness.dark
@@ -766,28 +837,20 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
           data: themeData(),
           child: Row(
             children: [
+              Row(mainAxisSize: MainAxisSize.min, children: left),
               Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: left,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    reverse: true,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: right,
+                    ),
                   ),
                 ),
               ),
-              Text(
-                    pi.hostname.isNotEmpty ? pi.hostname : widget.id,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.color
-                          ?.withOpacity(0.6),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ).marginOnly(right: 8),
-              _CloseMenu(id: widget.id, ffi: widget.ffi),
             ],
           ),
         ),
@@ -798,7 +861,7 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
   Widget _buildBarDivider(BuildContext context) {
     return Container(
       width: 1,
-      height: 20,
+      height: 16,
       color: Theme.of(context).dividerColor,
     ).marginSymmetric(horizontal: 6);
   }
@@ -1211,8 +1274,8 @@ class _MonitorMenu extends StatelessWidget {
 
   Widget buildMonitorMenu(BuildContext context) {
     final width = SimpleWrapper<double>(0);
-    final monitorsIcon =
-        globalMonitorsWidget(width, Colors.white, Colors.black38);
+    final monitorsIcon = globalMonitorsWidget(
+        width, Colors.white, _ToolbarTheme.hoverBlueColor, context);
     return _IconSubmenuButton(
         tooltip: 'Select Monitor',
         icon: monitorsIcon,
@@ -1256,13 +1319,13 @@ class _MonitorMenu extends StatelessWidget {
         child: Text(translate('Show displays as individual windows')));
   }
 
-  buildOneMonitorButton(i, curDisplay) => Text(
+  buildOneMonitorButton(i, curDisplay, BuildContext context) => Text(
         '${i + 1}',
         style: TextStyle(
           color: i == curDisplay
-              ? _ToolbarTheme.blueColor
-              : _ToolbarTheme.inactiveColor,
-          fontSize: 12,
+              ? _ToolbarTheme.hoverBlueColor
+              : _ToolbarTheme.flatIconColor(context),
+          fontSize: 10,
           fontWeight: FontWeight.bold,
         ),
       );
@@ -1279,7 +1342,7 @@ class _MonitorMenu extends StatelessWidget {
           Widget? monitorsIcon;
           if (isAllMonitors) {
             monitorsIcon = globalMonitorsWidget(
-                width, Colors.white, _ToolbarTheme.blueColor);
+                width, Colors.white, _ToolbarTheme.blueColor, context);
           }
           return _IconMenuButton(
             tooltip: isMulti
@@ -1308,10 +1371,14 @@ class _MonitorMenu extends StatelessWidget {
                       children: [
                         SvgPicture.asset(
                           "assets/screen.svg",
-                          colorFilter:
-                              ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                          colorFilter: ColorFilter.mode(
+                              i == display.value
+                                  ? _ToolbarTheme.hoverBlueColor
+                                  : _ToolbarTheme.flatIconColor(context),
+                              BlendMode.srcIn),
                         ),
-                        Obx(() => buildOneMonitorButton(i, display.value)),
+                        Obx(() =>
+                            buildOneMonitorButton(i, display.value, context)),
                       ],
                     ),
                   ),
@@ -1328,8 +1395,8 @@ class _MonitorMenu extends StatelessWidget {
     return monitorList;
   }
 
-  globalMonitorsWidget(
-      SimpleWrapper<double> width, Color activeTextColor, Color activeBgColor) {
+  globalMonitorsWidget(SimpleWrapper<double> width, Color activeTextColor,
+      Color activeBgColor, BuildContext context) {
     getMonitors() {
       final pi = ffi.ffiModel.pi;
       RxInt display = CurrentDisplayState.find(id);
@@ -1361,10 +1428,11 @@ class _MonitorMenu extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               border: Border.all(
-                color: Colors.grey,
+                color: _ToolbarTheme.flatIconColor(context),
                 width: 1.0,
               ),
-              color: display.value == i ? activeBgColor : Colors.white,
+              color:
+                  display.value == i ? activeBgColor : Colors.transparent,
             ),
             child: Center(
                 child: Text(
@@ -1372,7 +1440,7 @@ class _MonitorMenu extends StatelessWidget {
               style: TextStyle(
                 color: display.value == i
                     ? activeTextColor
-                    : _ToolbarTheme.inactiveColor,
+                    : _ToolbarTheme.flatIconColor(context),
                 fontSize: fontSize,
                 fontWeight: FontWeight.bold,
               ),
@@ -3170,6 +3238,7 @@ class _CloseMenu extends StatelessWidget {
       },
       color: _ToolbarTheme.redColor,
       hoverColor: _ToolbarTheme.hoverRedColor,
+      iconColor: _ToolbarTheme.hoverRedColor,
     );
   }
 }
@@ -3185,6 +3254,7 @@ class _IconMenuButton extends StatefulWidget {
   final double? vMargin;
   final bool topLevel;
   final double? width;
+  final Color? iconColor;
   const _IconMenuButton({
     Key? key,
     this.assetName,
@@ -3197,6 +3267,7 @@ class _IconMenuButton extends StatefulWidget {
     this.vMargin,
     this.topLevel = true,
     this.width,
+    this.iconColor,
   }) : super(key: key);
 
   @override
@@ -3209,12 +3280,13 @@ class _IconMenuButtonState extends State<_IconMenuButton> {
   @override
   Widget build(BuildContext context) {
     assert(widget.assetName != null || widget.icon != null);
-    final flat = widget.icon == null && _ToolbarTheme.isFlat(widget.color);
+    final flat = _ToolbarTheme.isFlat(widget.color);
     final icon = widget.icon ??
         SvgPicture.asset(
           widget.assetName!,
           colorFilter: ColorFilter.mode(
-              flat ? _ToolbarTheme.flatIconColor(context) : Colors.white,
+              widget.iconColor ??
+                  (flat ? _ToolbarTheme.flatIconColor(context) : Colors.white),
               BlendMode.srcIn),
           width: _ToolbarTheme.buttonSize,
           height: _ToolbarTheme.buttonSize,
@@ -3300,7 +3372,7 @@ class _IconSubmenuButtonState extends State<_IconSubmenuButton> {
   @override
   Widget build(BuildContext context) {
     assert(widget.svg != null || widget.icon != null);
-    final flat = widget.icon == null && _ToolbarTheme.isFlat(widget.color);
+    final flat = _ToolbarTheme.isFlat(widget.color);
     final icon = widget.icon ??
         SvgPicture.asset(
           widget.svg!,

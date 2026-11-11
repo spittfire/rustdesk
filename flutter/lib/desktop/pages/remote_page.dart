@@ -737,8 +737,10 @@ class _RemotePageState extends State<RemotePage>
         children: [
           Container(
               color: kColorCanvas,
-              padding: const EdgeInsets.only(
-                  top: kDesktopRemoteSessionToolbarHeight),
+              padding: EdgeInsets.only(
+                  top: stateGlobal.fullscreen.isTrue
+                      ? 0
+                      : kDesktopRemoteSessionToolbarHeight),
               child: RawKeyFocusScope(
                   focusNode: _rawKeyFocusNode,
                   onFocusChange: (bool imageFocused) {
